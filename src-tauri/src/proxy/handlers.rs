@@ -43,6 +43,13 @@ use bytes::Bytes;
 use http_body_util::BodyExt;
 use serde_json::{json, Value};
 
+fn should_convert_responses_to_chat(
+    provider: &crate::provider::Provider,
+    endpoint: &str,
+) -> bool {
+    super::providers::should_convert_codex_responses_to_chat(provider, endpoint)
+}
+
 // ============================================================================
 // 健康检查和状态查询（简单端点）
 // ============================================================================
@@ -626,6 +633,7 @@ pub async fn handle_chat_completions(
     let uri = parts.uri;
     let mut headers = parts.headers;
     let extensions = parts.extensions;
+
     let body_bytes = req_body
         .collect()
         .await
@@ -692,6 +700,7 @@ pub async fn handle_responses(
     let uri = parts.uri;
     let mut headers = parts.headers;
     let extensions = parts.extensions;
+
     let body_bytes = req_body
         .collect()
         .await
@@ -739,7 +748,7 @@ pub async fn handle_responses(
     ctx.provider = result.provider;
     let response = result.response;
 
-    if super::providers::should_convert_codex_responses_to_chat(&ctx.provider, &endpoint) {
+    if should_convert_responses_to_chat(&ctx.provider, &endpoint) {
         return handle_codex_chat_to_responses_transform(
             response,
             &ctx,
@@ -771,6 +780,7 @@ pub async fn handle_responses_compact(
     let uri = parts.uri;
     let mut headers = parts.headers;
     let extensions = parts.extensions;
+
     let body_bytes = req_body
         .collect()
         .await
@@ -818,7 +828,7 @@ pub async fn handle_responses_compact(
     ctx.provider = result.provider;
     let response = result.response;
 
-    if super::providers::should_convert_codex_responses_to_chat(&ctx.provider, &endpoint) {
+    if should_convert_responses_to_chat(&ctx.provider, &endpoint) {
         return handle_codex_chat_to_responses_transform(
             response,
             &ctx,

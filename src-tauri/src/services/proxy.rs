@@ -603,9 +603,11 @@ impl ProxyService {
             .await
             .map(|c| c.enabled)
             .unwrap_or(false);
-        // OpenCode and OpenClaw don't support proxy features, always return false
+        // OpenCode, OpenClaw, Hermes and MimoCode don't support proxy features, always return false
         let opencode_enabled = false;
         let openclaw_enabled = false;
+        let hermes_enabled = false;
+        let mimo_enabled = false;
 
         Ok(ProxyTakeoverStatus {
             claude: claude_enabled,
@@ -613,6 +615,8 @@ impl ProxyService {
             gemini: gemini_enabled,
             opencode: opencode_enabled,
             openclaw: openclaw_enabled,
+            hermes: hermes_enabled,
+            mimo: mimo_enabled,
         })
     }
 
@@ -1062,6 +1066,7 @@ impl ProxyService {
                     }
                 }
             }
+            // MimoCode: Copilot auth is handled by CopilotAuthState, no token sync needed
             _ => {}
         }
 
@@ -1246,6 +1251,8 @@ impl ProxyService {
                     .map_err(|e| format!("备份 Gemini 配置失败: {e}"))?;
             }
         }
+
+        // MimoCode 不参与代理接管，跳过备份
 
         log::info!("已备份所有应用的 Live 配置");
         Ok(())
@@ -1575,7 +1582,11 @@ impl ProxyService {
     async fn restore_live_configs(&self) -> Result<(), String> {
         let mut errors = Vec::new();
 
-        for app_type in [AppType::Claude, AppType::Codex, AppType::Gemini] {
+        for app_type in [
+            AppType::Claude,
+            AppType::Codex,
+            AppType::Gemini,
+        ] {
             if let Err(e) = self
                 .restore_live_config_for_app_with_fallback(&app_type)
                 .await
@@ -1911,7 +1922,7 @@ impl ProxyService {
         Ok(())
     }
 
-    /// 检查是否处于 Live 接管模式
+    // ==================== 原有方法 ====================
     pub async fn is_takeover_active(&self) -> Result<bool, String> {
         let status = self.get_takeover_status().await?;
         Ok(status.claude || status.codex || status.gemini)
@@ -2103,7 +2114,7 @@ impl ProxyService {
                 serde_json::to_string(&env_backup)
                     .map_err(|e| format!("序列化 Gemini 配置失败: {e}"))?
             }
-            _ => return Err(format!("未知的应用类型: {app_type}")),
+            AppType::MimoCode | _ => return Err(format!("未知的应用类型: {app_type}")),
         };
 
         self.db

@@ -1302,7 +1302,8 @@ impl RequestForwarder {
         };
         let codex_responses_to_chat = matches!(app_type, AppType::Codex)
             && super::providers::should_convert_codex_responses_to_chat(provider, endpoint);
-        let (effective_endpoint, passthrough_query) = if codex_responses_to_chat {
+        let responses_to_chat = codex_responses_to_chat;
+        let (effective_endpoint, passthrough_query) = if responses_to_chat {
             rewrite_codex_responses_endpoint_to_chat(endpoint)
         } else if needs_transform && adapter.name() == "Claude" {
             let api_format = resolved_claude_api_format
@@ -1318,7 +1319,7 @@ impl RequestForwarder {
             )
         };
 
-        let codex_chat_base_is_full_endpoint = codex_responses_to_chat
+        let codex_chat_base_is_full_endpoint = responses_to_chat
             && base_url
                 .trim_end_matches('/')
                 .to_ascii_lowercase()
@@ -1420,8 +1421,7 @@ impl RequestForwarder {
         );
         let request_is_streaming =
             is_streaming_request(&effective_endpoint, &filtered_body, headers);
-        let force_identity_encoding =
-            needs_transform || codex_responses_to_chat || request_is_streaming;
+        let force_identity_encoding = needs_transform || responses_to_chat || request_is_streaming;
 
         // Codex OAuth 需要注入的 ChatGPT-Account-Id（在动态 token 获取期间填充）
         let mut codex_oauth_account_id: Option<String> = None;
