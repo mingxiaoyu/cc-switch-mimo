@@ -1,0 +1,19 @@
+name: Cleanup Old Workflow Runs
+
+on:
+  workflow_dispatch: # 允许你随时在 UI 界面手动触发
+
+jobs:
+  del_runs:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Delete workflow runs
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 0           # 忽略按天数保留
+          keep_minimum_runs: 3     # 核心配置：对每个工作流严格保留最近 3 次记录
