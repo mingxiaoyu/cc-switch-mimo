@@ -2,6 +2,11 @@ name: Build CC Switch
 
 on:
   workflow_dispatch: # 允许你随时在 UI 界面手动触发
+    inputs:
+      ref:
+        description: 'Git branch/tag/SHA to build'
+        required: false
+        default: 'main'
 
 permissions:
   contents: read
@@ -23,6 +28,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref_name }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
