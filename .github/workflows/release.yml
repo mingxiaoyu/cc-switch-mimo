@@ -131,6 +131,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Prepare Tauri signing key
+        if: secrets.TAURI_SIGNING_PRIVATE_KEY
         shell: bash
         run: |
           # 调试：检查 Secret 是否存在
@@ -187,7 +188,7 @@ jobs:
           echo "✅ Tauri signing key prepared"
 
       - name: Import Apple signing certificate
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && secrets.APPLE_CERTIFICATE
         shell: bash
         run: |
           set -euo pipefail
@@ -228,8 +229,8 @@ jobs:
           # Cleanup certificate file
           rm -f "$CERT_PATH"
 
-      - name: Build Tauri App (macOS)
-        if: runner.os == 'macOS'
+      - name: Build Tauri App (macOS) - signed
+        if: runner.os == 'macOS' && secrets.APPLE_CERTIFICATE
         shell: bash
         timeout-minutes: 60
         env:
@@ -257,6 +258,15 @@ jobs:
             sleep "$sleep_seconds"
           done
 
+      - name: Build Tauri App (macOS) - unsigned
+        if: runner.os == 'macOS' && !secrets.APPLE_CERTIFICATE
+        shell: bash
+        timeout-minutes: 60
+        run: |
+          set -euo pipefail
+          echo "=== macOS unsigned build ==="
+          pnpm tauri build --target universal-apple-darwin
+
       - name: Build Tauri App (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -274,8 +284,8 @@ jobs:
         if: runner.os == 'Linux'
         run: pnpm tauri build --bundles appimage,deb,rpm
 
-      - name: Prepare macOS Assets
-        if: runner.os == 'macOS'
+      - name: Prepare macOS Assets (signed)
+        if: runner.os == 'macOS' && secrets.APPLE_CERTIFICATE
         shell: bash
         run: |
           set -euxo pipefail
@@ -348,6 +358,44 @@ jobs:
 
           rm -rf "$DMG_STAGE_DIR"
           echo "✅ Styled DMG created: $NEW_DMG"
+
+      - name: Prepare macOS Assets (unsigned)
+        if: runner.os == 'macOS' && !secrets.APPLE_CERTIFICATE
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p release-assets
+          VERSION="${GITHUB_REF_NAME}"  # e.g., v3.5.0
+
+          # Locate bundle artifacts
+          TAR_GZ=""; APP_PATH=""
+          for path in \
+            "src-tauri/target/universal-apple-darwin/release/bundle/macos" \
+            "src-tauri/target/aarch64-apple-darwin/release/bundle/macos" \
+            "src-tauri/target/x86_64-apple-darwin/release/bundle/macos" \
+            "src-tauri/target/release/bundle/macos"; do
+            if [ -d "$path" ]; then
+              [ -z "$TAR_GZ" ]   && TAR_GZ=$(find "$path" -maxdepth 1 -name "*.tar.gz" -type f | head -1 || true)
+              [ -z "$APP_PATH" ] && APP_PATH=$(find "$path" -maxdepth 1 -name "*.app" -type d | head -1 || true)
+            fi
+          done
+
+          if [ -n "$TAR_GZ" ]; then
+            NEW_TAR_GZ="CC-Switch-${VERSION}-macOS.tar.gz"
+            cp "$TAR_GZ" "release-assets/$NEW_TAR_GZ"
+            [ -f "$TAR_GZ.sig" ] && cp "$TAR_GZ.sig" "release-assets/$NEW_TAR_GZ.sig" || echo ".sig for macOS not found yet"
+            echo "macOS updater artifact copied: $NEW_TAR_GZ"
+          else
+            echo "No macOS .tar.gz updater artifact found" >&2 || true
+          fi
+
+          if [ -n "$APP_PATH" ]; then
+            NEW_ZIP="CC-Switch-${VERSION}-macOS.zip"
+            ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "release-assets/$NEW_ZIP"
+            echo "macOS zip ready: $NEW_ZIP"
+          else
+            echo "No .app found to package as zip" >&2 || true
+          fi
 
       - name: Notarize macOS DMG
         if: runner.os == 'macOS'
